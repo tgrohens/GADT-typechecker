@@ -99,7 +99,8 @@ let rec infer              (* [infer] expects... *)
       let typ1 = infer p xenv loc hyps tenv e1 in
       infer p (Export.bind xenv x) loc hyps (bind x typ1 tenv) e2
 
-  | TeFix(_, _, _) -> failwith "fix not done yet"
+  | TeFix(x, typ, e) ->
+      check p (Export.bind xenv x) hyps (bind x typ tenv) e typ; typ
 
   | TeTyAbs(_, _) -> failwith "tyabs not done yet"
 
