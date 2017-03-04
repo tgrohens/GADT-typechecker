@@ -79,8 +79,41 @@ let rec infer              (* [infer] expects... *)
 
   match term with
 
-  | _ ->
-     failwith "TYPECHECKING IS NOT IMPLEMENTED YET!" (* do something here! *)
+  | TeVar a -> lookup a tenv 
+
+  | TeAbs(x, typ, e, info) ->
+      let body_type = infer p (Export.bind xenv x) loc hyps
+        (bind x typ tenv) e in
+      let fty = TyArrow (typ, body_type) in
+      info := Some {hyps = hyps; tenv = tenv; fty = fty};
+      fty
+
+  | TeApp(e1, e2, info) ->
+      let fty = infer p xenv loc hyps tenv e1 in (* tau = t -> t ? *)
+      let dom, codom = deconstruct_arrow xenv loc fty in
+      check p xenv hyps tenv e2 dom;
+      info := Some {domain = dom; codomain = codom};
+      codom
+
+  | TeLet(x, e1, e2) ->
+      let typ1 = infer p xenv loc hyps tenv e1 in
+      infer p (Export.bind xenv x) loc hyps (bind x typ1 tenv) e2
+
+  | TeFix(_, _, _) -> failwith "fix not done yet"
+
+  | TeTyAbs(_, _) -> failwith "tyabs not done yet"
+
+  | TeTyApp(_, _) -> failwith "tyapp not done yet"
+
+  | TeData(_, _, _) -> failwith "datatypes not done yet"
+
+  | TeTyAnnot(term, typ) ->
+      check p xenv hyps tenv term typ;
+      typ
+
+  | TeMatch(_, _, _) -> failwith "match not done yet"
+
+  | TeLoc(loc, term) -> infer p xenv loc hyps tenv term
 
 and check                  (* [check] expects... *)
     (p : program)          (* a program, which provides information about type & data constructors; *)
