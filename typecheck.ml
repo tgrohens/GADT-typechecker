@@ -134,7 +134,9 @@ and check                  (* [check] expects... *)
   | TeLoc (loc, term) ->
 
       let inferred = infer p xenv loc hyps tenv term in
-      failwith "CHECK IS NOT COMPLETE YET!" (* do something here! *)
+      if entailment hyps [(expected, inferred)] = false then
+        mismatch xenv loc hyps expected inferred
+
 
   | _ ->
       (* out of luck! *)
