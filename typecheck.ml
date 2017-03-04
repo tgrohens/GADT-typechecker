@@ -102,7 +102,9 @@ let rec infer              (* [infer] expects... *)
   | TeFix(x, typ, e) ->
       check p (Export.bind xenv x) hyps (bind x typ tenv) e typ; typ
 
-  | TeTyAbs(_, _) -> failwith "tyabs not done yet"
+  | TeTyAbs(alpha, e) ->
+      let typ = infer p (Export.bind xenv alpha) loc hyps tenv e in
+      TyForall (abstract alpha typ)
 
   | TeTyApp(_, _) -> failwith "tyapp not done yet"
 
