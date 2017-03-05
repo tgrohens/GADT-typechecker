@@ -1,6 +1,8 @@
 open Printf
 open Types
 open Print
+open Symbols
+open Equations
 
 (* Auxiliary functions for the type-checker. *)
 
@@ -93,3 +95,43 @@ let deconstruct_tycon xenv loc : ftype -> Atom.atom =
     | ty ->
 	expected_form xenv loc "an algebraic data" ty
 
+let deconstruct_tuple xenv loc : ftype -> ftype list =
+  function
+    | TyTuple l -> l
+    | ty -> expected_form xenv loc "a tuple" ty (* shouldn't happen *)
+
+(* ------------------------------------------------------------------------- *)
+
+(* Functions that help manipulate type and data constructors. *)
+
+(* [inst_datacon p xenv loc k typs] fetches the datacon [k] and instantiates
+   the universal type variables at the head of [ty]
+   with the types given in [typs]. *)
+
+let inst_datacon p xenv loc k types = 
+  let univ = type_scheme p k in
+  let rec inst_list count univ types = match types with
+    | [] ->
+        let foralls = count_foralls univ in
+        if foralls > 0 then
+          arity_mismatch xenv loc "data constructor" k
+            "type" (foralls+count) count
+        else univ 
+    | typ::types ->
+        (* we don't directly use deconstruct_univ to remember the number of
+           applied type arguments *)
+        let ty_con = match univ with
+          | TyForall c -> c
+          | _ -> arity_mismatch xenv loc "data constructor" k "type"
+              count (count + (List.length types) + 1) in
+        inst_list (count+1) (fill ty_con typ) types in
+  inst_list 0 univ types
+
+let rec check_typequs xenv loc typ hyps =
+  match typ with
+    | TyWhere (typ, lhs, rhs) ->
+        if entailment hyps [(lhs, rhs)] = false then
+          unsatisfied_equation xenv loc hyps lhs rhs
+        else
+          check_typequs xenv loc typ ((lhs, rhs)::hyps)
+    | _ -> typ, hyps

@@ -106,9 +106,26 @@ let rec infer              (* [infer] expects... *)
       let typ = infer p (Export.bind xenv alpha) loc hyps tenv e in
       TyForall (abstract alpha typ)
 
-  | TeTyApp(_, _) -> failwith "tyapp not done yet"
+  | TeTyApp(e, tau) ->
+      let typ = infer p xenv loc hyps tenv e in
+      let univtyp = deconstruct_univ xenv loc typ in
+      fill univtyp tau
 
-  | TeData(_, _, _) -> failwith "datatypes not done yet"
+  | TeData(k, types, terms) ->
+      (* get the type associated to k and instantiate the head variables *)
+      let inst_type = inst_datacon p xenv loc k types in
+      (* check that the equality constraints hold and add them to the context *)
+      let (inst_type, hyps) = check_typequs xenv loc inst_type hyps in
+      (* verify that the [terms] have the right [types] *)
+      let (exp_tuple, res) = deconstruct_arrow xenv loc inst_type in
+      let exp_types = deconstruct_tuple xenv loc exp_tuple in
+      if (List.length exp_types != List.length terms) then
+        arity_mismatch xenv loc "data constructor" k "term"
+          (List.length exp_types) (List.length terms)
+      else
+        List.iter2 (check p xenv hyps tenv) terms exp_types;
+      res
+
 
   | TeTyAnnot(term, typ) ->
       check p xenv hyps tenv term typ;
@@ -139,7 +156,6 @@ and check                  (* [check] expects... *)
       let inferred = infer p xenv loc hyps tenv term in
       if entailment hyps [(expected, inferred)] = false then
         mismatch xenv loc hyps expected inferred
-
 
   | _ ->
       (* out of luck! *)
