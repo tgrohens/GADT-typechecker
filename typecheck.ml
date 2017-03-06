@@ -117,7 +117,7 @@ let rec infer              (* [infer] expects... *)
       let inst_type = inst_datacon xenv loc k univ types in
       (* check that the equality constraints hold and add them to the context *)
       let (inst_type, hyps) = check_typequs xenv loc inst_type hyps in
-      (* verify that the [terms] have the right [types] *)
+      (* check that the [terms] have the right [types] *)
       let (exp_tuple, res) = deconstruct_arrow xenv loc inst_type in
       let exp_types = deconstruct_tuple xenv loc exp_tuple in
       if (List.length exp_types != List.length terms) then
