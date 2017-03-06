@@ -103,7 +103,7 @@ val hint: ftype_context -> Identifier.identifier
 
 (* Typing environments map term variables to types. *)
 
-type tenv
+type tenv = ftype AtomMap.t
 
 val empty: tenv
 val lookup: atom -> tenv -> ftype
