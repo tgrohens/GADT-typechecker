@@ -113,7 +113,8 @@ let rec infer              (* [infer] expects... *)
 
   | TeData(k, types, terms) ->
       (* get the type associated to k and instantiate the head variables *)
-      let inst_type = inst_datacon p xenv loc k types in
+      let univ = type_scheme p k in
+      let inst_type = inst_datacon xenv loc k univ types in
       (* check that the equality constraints hold and add them to the context *)
       let (inst_type, hyps) = check_typequs xenv loc inst_type hyps in
       (* verify that the [terms] have the right [types] *)
@@ -131,9 +132,87 @@ let rec infer              (* [infer] expects... *)
       check p xenv hyps tenv term typ;
       typ
 
-  | TeMatch(_, _, _) -> failwith "match not done yet"
+  | TeMatch(e, rettyp, clauses) ->
+      let datatyp = infer p xenv loc hyps tenv e in
+      let tycon, contyps = deconstruct_tycon_l xenv loc datatyp in
+      let possible_datacons = data_constructors p tycon in
+      let abs_datacons = type_clauses p xenv hyps tenv rettyp tycon contyps 
+        possible_datacons clauses in
+      (* add treatment of missing clauses *)
+      AtomSet.iter (missing_clauses p xenv loc hyps tenv rettyp tycon contyps)
+        abs_datacons;
+      rettyp
 
   | TeLoc(loc, term) -> infer p xenv loc hyps tenv term
+
+and type_clauses
+  (p : program)
+  (xenv : Export.env)
+  (hyps : equations)
+  (tenv : tenv)
+  (exp_rettyp : ftype)
+  (exp_tycon : Atom.atom)
+  (contyps : ftype list)
+  (poss_datacons : AtomSet.t)
+  (clauses : clause list)
+  : AtomSet.t =
+  match clauses with
+  | [] ->
+      poss_datacons
+
+  | clause::clauses ->
+      let Clause(patt, term) = clause in
+      let PatData(loc, k, typarams, params) = patt in
+      let tyabsvars = List.map (fun p -> TyFreeVar p) typarams in
+      let xenv2 = Export.sbind xenv typarams in
+      (* instantiate the head quantifiers *)
+      let univ = type_scheme p k in
+      let inst_type = inst_datacon xenv2 loc k univ tyabsvars in
+      (* add the constraints to the environment *)
+      let (inst_type, hyps2) = add_typequs inst_type hyps in
+      (* get the actual term types tuple and data constructor *)
+      let (param_tytuple, rettyp) = deconstruct_arrow xenv2 loc inst_type in
+      let param_types = deconstruct_tuple xenv2 loc param_tytuple in
+      let (tycon, ret_contyps) = deconstruct_tycon_l xenv2 loc rettyp in
+      (* check we have the right type constructor *)
+      begin if Atom.equal tycon exp_tycon = false then
+        typecon_mismatch xenv2 loc k exp_tycon tycon end;
+      (* check we didn't already have a clause with this datacon *)
+      begin if AtomSet.mem k poss_datacons = false then
+        redundant_clause loc end;
+      (* check we have the right number of term parameters *)
+      begin if List.length params <> List.length param_types then
+        arity_mismatch xenv2 loc "data constructor" k "term"
+          (List.length param_types) (List.length params) end;
+      (* add contyps = ret_contyps to the context *)
+      let hyps2 = add_hyps hyps2 contyps ret_contyps in
+      (* add the parameters to the typing environment *)
+      let tenv2 = binds (List.combine params param_types) tenv in
+      let xenv2 = Export.sbind xenv2 params in
+      begin
+      if inconsistent hyps2 then begin
+       inaccessible_clause loc end
+      else
+        check p xenv2 hyps2 tenv2 term exp_rettyp;
+      end;
+      type_clauses p xenv hyps tenv exp_rettyp exp_tycon contyps
+        (AtomSet.remove k poss_datacons) clauses
+      
+and missing_clauses p xenv loc hyps tenv exp_rettyp exp_tycon contyps datacon =
+  let univ = type_scheme p datacon in
+  let rec fill_univ xenv = function
+    | TyForall c ->
+        let a = Atom.fresha datacon in
+        fill_univ (Export.bind xenv a) (fill c (TyFreeVar a))
+    | t -> xenv, t in
+  let xenv, inst_type = fill_univ xenv univ in
+  let inst_type, hyps = add_typequs inst_type hyps in
+  let _, rettyp = deconstruct_arrow xenv loc inst_type in
+  let _, ret_contyps = deconstruct_tycon_l xenv loc rettyp in
+  let hyps = add_hyps hyps contyps ret_contyps in
+  if inconsistent hyps = false then
+    missing_clause xenv hyps loc datacon 
+
 
 and check                  (* [check] expects... *)
     (p : program)          (* a program, which provides information about type & data constructors; *)
@@ -152,7 +231,6 @@ and check                  (* [check] expects... *)
 
   match term with
   | TeLoc (loc, term) ->
-
       let inferred = infer p xenv loc hyps tenv term in
       if entailment hyps [(expected, inferred)] = false then
         mismatch xenv loc hyps expected inferred

@@ -95,6 +95,13 @@ let deconstruct_tycon xenv loc : ftype -> Atom.atom =
     | ty ->
 	expected_form xenv loc "an algebraic data" ty
 
+let deconstruct_tycon_l xenv loc : ftype -> Atom.atom * ftype list =
+  function
+    | TyCon (tc, tl) ->
+	tc, tl
+    | ty ->
+	expected_form xenv loc "an algebraic data" ty
+
 let deconstruct_tuple xenv loc : ftype -> ftype list =
   function
     | TyTuple l -> l
@@ -104,18 +111,13 @@ let deconstruct_tuple xenv loc : ftype -> ftype list =
 
 (* Functions that help manipulate type and data constructors. *)
 
-(* [inst_datacon p xenv loc k typs] fetches the datacon [k] and instantiates
-   the universal type variables at the head of [ty]
-   with the types given in [typs]. *)
-
-let inst_datacon p xenv loc k types = 
-  let univ = type_scheme p k in
+let inst_datacon xenv loc k univ types = 
   let rec inst_list count univ types = match types with
     | [] ->
         let foralls = count_foralls univ in
         if foralls > 0 then
-          arity_mismatch xenv loc "data constructor" k
-            "type" (foralls+count) count
+          arity_mismatch xenv loc "data constructor" k "type"
+            (foralls+count) count
         else univ 
     | typ::types ->
         (* we don't directly use deconstruct_univ to remember the number of
@@ -135,3 +137,16 @@ let rec check_typequs xenv loc typ hyps =
         else
           check_typequs xenv loc typ ((lhs, rhs)::hyps)
     | _ -> typ, hyps
+
+let rec add_typequs typ hyps =
+  match typ with
+    | TyWhere (typ, lhs, rhs) ->
+        let typ, hyps = add_typequs typ hyps in
+        typ, (lhs, rhs)::hyps
+    | _ -> typ, hyps
+    
+let rec add_hyps hyps typs1 typs2 =
+  match typs1, typs2 with
+    | [], [] -> hyps
+    | t1::t1s, t2::t2s -> (t1, t2)::(add_hyps hyps t1s t2s)
+    | _ -> assert false (* shouldn't happen *)
