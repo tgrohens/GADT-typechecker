@@ -24,38 +24,38 @@ let get = function
 
 (* translate a type by replacing arrows with the arrow type constructor *)
 
-let rec translate_type arrow_con typ = match typ with
+let rec translate_type arrow typ = match typ with
   | TyBoundVar _
   | TyFreeVar _ -> typ
 
   | TyArrow(typ1, typ2) ->
-      TyCon(arrow_con, [translate_type arrow_con typ1;
-        translate_type arrow_con typ2])
+      TyCon(arrow, [translate_type arrow typ1;
+        translate_type arrow typ2])
 
   | TyForall context ->
-      let a = Atom.fresha arrow_con in
+      let a = Atom.fresha arrow in
       let typ = fill context (TyFreeVar a) in
-      let typ = translate_type arrow_con typ in
+      let typ = translate_type arrow typ in
       TyForall (abstract a typ)
 
   | TyCon(tycon, types) ->
-      TyCon(tycon, List.map (translate_type arrow_con) types)
+      TyCon(tycon, List.map (translate_type arrow) types)
 
   | TyTuple types ->
-      TyTuple (List.map (translate_type arrow_con) types)
+      TyTuple (List.map (translate_type arrow) types)
 
   | TyWhere(t1, t2, t3) ->
-      TyWhere(translate_type arrow_con t1, translate_type arrow_con t2,
-        translate_type arrow_con t2)  
+      TyWhere(translate_type arrow t1, translate_type arrow t2,
+        translate_type arrow t2)  
 
 (* return the term and a list of newly created data constructors matching the
    λ-abstractions inside the term *)
 
-let rec translate_term p arrow_con apply term = match term with
+let rec translate_term p arrow apply term = match term with
   | TeVar a -> [], term
 
   | TeAbs(x, typ, e, info_ref) ->
-      let newdatacons, e' = translate_term p arrow_con apply e in
+      let newdatacons, e' = translate_term p arrow apply e in
       let info = get (!info_ref) in
       let arg_ty, ret_ty = deconst_arrow info.fty in
       let freetyvars =
@@ -65,13 +65,13 @@ let rec translate_term p arrow_con apply term = match term with
         (Identifier.mk "Apply_lambda" Syntax.term_sort) in
       (* translate the typing env and constraint *)
       let trans_hyps = List.map (fun (ty1, ty2) ->
-        (translate_type arrow_con ty1, translate_type arrow_con ty2)) info.hyps in
+        (translate_type arrow ty1, translate_type arrow ty2)) info.hyps in
       let tenv_vars, tenv_types = List.split (AtomMap.bindings info.tenv) in
-      let trans_types = List.map (translate_type arrow_con) tenv_types in
+      let trans_types = List.map (translate_type arrow) tenv_types in
       (* construct the type scheme of the new data constructor *)
       let base_type = TyArrow (TyTuple trans_types,
-        TyCon (arrow_con,
-          [translate_type arrow_con arg_ty; translate_type arrow_con ret_ty])) in
+        TyCon (arrow,
+          [translate_type arrow arg_ty; translate_type arrow ret_ty])) in
       let equs_type = wheres base_type trans_hyps in
       let univ_type = foralls (AtomSet.elements freetyvars) equs_type in
       (absdatacons, univ_type)::newdatacons,
@@ -83,29 +83,44 @@ let rec translate_term p arrow_con apply term = match term with
 
   | TeApp(e1, e2, inf) ->
       let info = get !inf in
-      let new1, e1' = translate_term p arrow_con apply e1 in
-      let new2, e2' = translate_term p arrow_con apply e2 in
-      let typ1 = translate_type arrow_con info.domain in
-      let typ2 = translate_type arrow_con info.codomain in 
+      let new1, e1' = translate_term p arrow apply e1 in
+      let new2, e2' = translate_term p arrow apply e2 in
+      let typ1 = translate_type arrow info.domain in
+      let typ2 = translate_type arrow info.codomain in 
       new1@new2, TeApp(TeApp(TeTyApp(TeTyApp(TeVar(apply), typ1), typ2),
                        e1', ref None), e2', ref None)
 
-  | TeLet(x, e1, e2) -> failwith "todo"
+  | TeLet(x, e1, e2) ->
+      let new1, e1' = translate_term p arrow apply e1 in
+      let new2, e2' = translate_term p arrow apply e2 in
+      new1@new2, TeLet(x, e1', e2')
 
-  | TeFix(x, typ, e) -> failwith "todo"
+  | TeFix(x, typ, e) ->
+      let newdatacons, e' = translate_term p arrow apply e in
+      let typ' = translate_type arrow typ in
+      newdatacons, TeFix(x, typ', e')
 
-  | TeTyAbs(alpha, e) -> failwith "todo"
+  | TeTyAbs(alpha, e) ->
+      let newdatacons, e' = translate_term p arrow apply e in
+      newdatacons, TeTyAbs(alpha, e')
 
-  | TeTyApp(e, tau) -> failwith "todo"
+  | TeTyApp(e, tau) ->
+      let newdatacons, e' = translate_term p arrow apply e in
+      let tau' = translate_type arrow tau in
+      newdatacons, TeTyApp(e', tau')
 
   | TeData(k, types, terms) -> failwith "todo"
 
-  | TeTyAnnot(term, typ) -> failwith "todo"
+  | TeTyAnnot(term, typ) ->
+      let newdatacons, term' = translate_term p arrow apply term in
+      let typ' = translate_type arrow typ in
+      newdatacons, TeTyAnnot(term', typ')
 
   | TeMatch(e, rettyp, clauses) -> failwith "todo"
 
-  | TeLoc(loc, term) -> failwith "todo"
-
+  | TeLoc(loc, term) ->
+      let newdatacons, term' = translate_term p arrow apply term in
+      newdatacons, TeLoc(loc, term')
 
 
 let translate (prog : Terms.program) =
