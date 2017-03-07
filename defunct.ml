@@ -26,6 +26,22 @@ let is_tycon typ1 typ2 =
   (match typ1 with TyTuple _ -> true | _ -> false) &&
   (match typ2 with TyCon(_, _) -> true | _ -> false)
 
+(* code for the generic apply term *)
+
+let apply_clauses = []
+
+let create_apply arrow apply =
+  let a1 = Atom.fresh (Identifier.mk "alpha1" Syntax.type_sort) in
+  let a2 = Atom.fresh (Identifier.mk "alpha2" Syntax.type_sort) in
+  let a1_t = TyFreeVar a1 in
+  let a2_t = TyFreeVar a2 in
+  let f = Atom.fresh (Identifier.mk "f" Syntax.term_sort) in
+  let f_t = TyCon(arrow, [a1_t; a2_t]) in
+  let arg = Atom.fresh (Identifier.mk "arg" Syntax.term_sort) in
+  TeFix(apply, foralls [a1; a2] (arrows [f_t; a1_t] a2_t),
+    TeTyAbs(a1, TeTyAbs(a2, TeAbs(f, f_t, TeAbs(arg, a1_t,
+      TeMatch(TeVar f, a2_t, apply_clauses), ref None), ref None))))
+
 (* translate a type by replacing arrows with the arrow type constructor *)
 
 let rec translate_type arrow typ = match typ with
@@ -154,7 +170,7 @@ let translate (prog : Terms.program) =
   let types = AtomMap.add arrow 2 types in
   let datacon_table = AtomMap.map (translate_type arrow) datacons in
   let newdatacons, body = translate_term prog arrow apply body in
-  let apply_code = TeVar apply in
+  let apply_code = create_apply arrow apply in
   let datacons = List.fold_left
     (fun dcs (newdc, scheme) -> AtomMap.add newdc scheme dcs)
     datacon_table newdatacons in
