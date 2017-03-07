@@ -109,19 +109,36 @@ let rec translate_term p arrow apply term = match term with
       let tau' = translate_type arrow tau in
       newdatacons, TeTyApp(e', tau')
 
-  | TeData(k, types, terms) -> failwith "todo"
+  | TeData(k, types, terms) ->
+      let newdatacons, terms' = List.fold_right
+        (fun term (dclist, tlist) ->
+          let newdcs, term' = translate_term p arrow apply term in
+          newdcs@dclist, term'::tlist) terms ([], []) in
+      let types' = List.map (translate_type arrow) types in
+      newdatacons, TeData(k, types', terms')
 
   | TeTyAnnot(term, typ) ->
       let newdatacons, term' = translate_term p arrow apply term in
       let typ' = translate_type arrow typ in
       newdatacons, TeTyAnnot(term', typ')
 
-  | TeMatch(e, rettyp, clauses) -> failwith "todo"
+  | TeMatch(e, rettyp, clauses) ->
+      let newdatacons, e' = translate_term p arrow apply e in
+      let rettyp' = translate_type arrow rettyp in
+      let newdatacons, clauses' = List.fold_right
+        (fun clause (dclist, clist) ->
+          let newdcs, clause' = translate_clause p arrow apply clause in
+          newdcs@dclist, clause'::clist) clauses (newdatacons, []) in
+      newdatacons, TeMatch(e', rettyp', clauses')
 
   | TeLoc(loc, term) ->
       let newdatacons, term' = translate_term p arrow apply term in
       newdatacons, TeLoc(loc, term')
 
+and translate_clause p arrow apply clause =
+  let Clause (patt, e) = clause in
+  let newdatacons, e' = translate_term p arrow apply e in
+  newdatacons, Clause(patt, e')
 
 let translate (prog : Terms.program) =
   prog (* do something here! *)
