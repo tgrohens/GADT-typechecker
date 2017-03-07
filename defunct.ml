@@ -22,11 +22,18 @@ let get = function
   | Some x -> x
   | _ -> assert false
 
+let is_tycon typ1 typ2 =
+  (match typ1 with TyTuple _ -> true | _ -> false) &&
+  (match typ2 with TyCon(_, _) -> true | _ -> false)
+
 (* translate a type by replacing arrows with the arrow type constructor *)
 
 let rec translate_type arrow typ = match typ with
   | TyBoundVar _
   | TyFreeVar _ -> typ
+
+  | TyArrow(typ1, typ2) when is_tycon typ1 typ2 ->
+      TyArrow(translate_type arrow typ1, translate_type arrow typ2)
 
   | TyArrow(typ1, typ2) ->
       TyCon(arrow, [translate_type arrow typ1;
