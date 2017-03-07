@@ -51,11 +51,11 @@ let rec translate_type arrow_con typ = match typ with
 (* return the term and a list of newly created data constructors matching the
    λ-abstractions inside the term *)
 
-let rec translate_term p arrow_con term = match term with
+let rec translate_term p arrow_con apply term = match term with
   | TeVar a -> [], term
 
   | TeAbs(x, typ, e, info_ref) ->
-      let newdatacons, e' = translate_term p arrow_con e in
+      let newdatacons, e' = translate_term p arrow_con apply e in
       let info = get (!info_ref) in
       let arg_ty, ret_ty = deconst_arrow info.fty in
       let freetyvars =
@@ -81,7 +81,14 @@ let rec translate_term p arrow_con term = match term with
 
 
 
-  | TeApp(e1, e2, info) -> failwith "todo"
+  | TeApp(e1, e2, inf) ->
+      let info = get !inf in
+      let new1, e1' = translate_term p arrow_con apply e1 in
+      let new2, e2' = translate_term p arrow_con apply e2 in
+      let typ1 = translate_type arrow_con info.domain in
+      let typ2 = translate_type arrow_con info.codomain in 
+      new1@new2, TeApp(TeApp(TeTyApp(TeTyApp(TeVar(apply), typ1), typ2),
+                       e1', ref None), e2', ref None)
 
   | TeLet(x, e1, e2) -> failwith "todo"
 
