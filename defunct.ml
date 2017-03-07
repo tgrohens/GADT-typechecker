@@ -141,4 +141,14 @@ and translate_clause p arrow apply clause =
   newdatacons, Clause(patt, e')
 
 let translate (prog : Terms.program) =
-  prog (* do something here! *)
+  let Prog(types, datacons, body) = prog in
+  let arrow = Atom.fresh (Identifier.mk "arrow" Syntax.typecon_sort) in
+  let apply = Atom.fresh (Identifier.mk "Apply" Syntax.term_sort) in
+  let types = AtomMap.add arrow 2 types in
+  let datacon_table = AtomMap.map (translate_type arrow) datacons in
+  let newdatacons, body = translate_term prog arrow apply body in
+  let apply_code = TeVar apply in
+  let datacons = List.fold_left
+    (fun dcs (newdc, scheme) -> AtomMap.add newdc scheme dcs)
+    datacon_table newdatacons in
+  Prog(types, datacons, TeLet(apply, apply_code, body))
