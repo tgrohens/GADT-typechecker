@@ -26,9 +26,17 @@ let is_tycon typ1 typ2 =
   (match typ1 with TyTuple _ -> true | _ -> false) &&
   (match typ2 with TyCon(_, _) -> true | _ -> false)
 
-(* code for the generic apply term *)
 
-let apply_clauses = []
+(* we need to insert [let x = arg in e] at the head of the clauses *)
+
+let apply_clauses = ref []
+
+let rec make_clauses arg = function
+  | [] -> []
+  | (patt, x, e)::clauses ->
+      Clause(patt, TeLet(x, TeVar arg, e))::(make_clauses arg clauses)
+  
+(* code for the generic apply term *)
 
 let create_apply arrow apply =
   let a1 = Atom.fresh (Identifier.mk "alpha1" Syntax.type_sort) in
@@ -40,7 +48,8 @@ let create_apply arrow apply =
   let arg = Atom.fresh (Identifier.mk "arg" Syntax.term_sort) in
   TeFix(apply, foralls [a1; a2] (arrows [f_t; a1_t] a2_t),
     TeTyAbs(a1, TeTyAbs(a2, TeAbs(f, f_t, TeAbs(arg, a1_t,
-      TeMatch(TeVar f, a2_t, apply_clauses), ref None), ref None))))
+      TeMatch(TeVar f, a2_t, make_clauses arg !apply_clauses),
+      ref None), ref None))))
 
 (* translate a type by replacing arrows with the arrow type constructor *)
 
@@ -97,12 +106,15 @@ let rec translate_term p arrow apply term = match term with
           [translate_type arrow arg_ty; translate_type arrow ret_ty])) in
       let equs_type = wheres base_type trans_hyps in
       let univ_type = foralls (AtomSet.elements freetyvars) equs_type in
+      (* construct the clause for the lambda in the apply match *)
+      let apply_clause =
+        PatData(Error.dummy, absdatacons,
+                       AtomSet.elements freetyvars, tenv_vars), x, e' in
+      apply_clauses := apply_clause::(!apply_clauses);
       (absdatacons, univ_type)::newdatacons,
       TeData(absdatacons,
         List.map (fun v -> TyFreeVar v) (AtomSet.elements freetyvars),
         List.map (fun x -> TeVar x) tenv_vars)
-
-
 
   | TeApp(e1, e2, inf) ->
       let info = get !inf in
