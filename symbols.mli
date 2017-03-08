@@ -8,6 +8,10 @@ open Terms
 
 val fv: fterm -> AtomSet.t
 
+(* [term_ftv term] is the set of the free type variables of [term]. *)
+
+val term_ftv: fterm -> AtomSet.t
+
 (* [type_constructor p dc] produces the type constructor with which the
    data constructor [dc] is associated. *)
 

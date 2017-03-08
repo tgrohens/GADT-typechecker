@@ -38,6 +38,32 @@ and fv_clause = function
   | Clause (PatData (_, _, _, tevars), term) ->
       sremove tevars (fv term)
 
+(* [term_ftv term] is the set of the free type variables of [term]. *)
+
+let rec term_ftv = function
+  | TeVar x -> AtomSet.empty
+  | TeAbs (x, ty, body, _)
+  | TeFix (x, ty, body) ->
+      AtomSet.union (ftv ty) (term_ftv body)
+  | TeApp (term1, term2, _) ->
+      AtomSet.union (term_ftv term1) (term_ftv term2)
+  | TeLet (x, term1, term2) ->
+      AtomSet.union (term_ftv term1) (term_ftv term2)
+  | TeTyAbs (ty, term) ->
+      AtomSet.remove ty (term_ftv term)
+  | TeTyApp (term, ty) ->
+      AtomSet.union (ftv ty) (term_ftv term)
+  | TeTyAnnot (term, _)
+  | TeLoc (_, term) ->
+      term_ftv term
+  | TeData (_, types, fields) ->
+      AtomSet.union (union_map ftv types) (union_map term_ftv fields)
+  | TeMatch (term, _, clauses) ->
+      AtomSet.union (term_ftv term) (union_map ftv_clause clauses)
+
+and ftv_clause = function
+  | Clause (PatData (_, _, tyvars, _), term) ->
+      sremove tyvars (term_ftv term)
 (* ------------------------------------------------------------------------- *)
 
 (* [head] extracts the type constructor that lies at the head of a type

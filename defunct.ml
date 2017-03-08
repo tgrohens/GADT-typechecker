@@ -93,6 +93,7 @@ let rec translate_term p arrow apply term = match term with
       let freetyvars =
         AtomSet.union (AtomSet.union (ftv_equs info.hyps) (ftv_tenv info.tenv))
                       (AtomSet.union (ftv arg_ty) (ftv ret_ty)) in
+      let freetyvars = AtomSet.union freetyvars (term_ftv e') in
       let absdatacons = Atom.fresh
         (Identifier.mk "Apply_lambda" Syntax.term_sort) in
       (* translate the typing env and constraint *)
