@@ -12,7 +12,7 @@ let rec ftv_equs = function
         (ftv_equs c)
 
 let rec ftv_tenv tenv =
-  AtomMap.fold (fun _ typ -> AtomSet.union (ftv typ)) tenv AtomSet.empty
+  AtomMap.fold (fun _ typ ftvs -> AtomSet.union (ftv typ) ftvs) tenv AtomSet.empty
 
 let deconst_arrow = function
   | TyArrow(t1, t2) -> t1, t2
@@ -33,8 +33,8 @@ let apply_clauses = ref []
 
 let rec make_clauses arg = function
   | [] -> []
-  | (patt, x, e)::clauses ->
-      Clause(patt, TeLet(x, TeVar arg, e))::(make_clauses arg clauses)
+  | (patt, x, typ, e)::clauses ->
+      Clause(patt, TeLet(x, TeTyAnnot(TeVar arg, typ), e))::(make_clauses arg clauses)
   
 (* code for the generic apply term *)
 
@@ -65,7 +65,7 @@ let rec translate_type arrow typ = match typ with
         translate_type arrow typ2])
 
   | TyForall context ->
-      let a = Atom.fresha arrow in
+      let a = Atom.fresh (hint context) in
       let typ = fill context (TyFreeVar a) in
       let typ = translate_type arrow typ in
       TyForall (abstract a typ)
@@ -108,8 +108,8 @@ let rec translate_term p arrow apply term = match term with
       let univ_type = foralls (AtomSet.elements freetyvars) equs_type in
       (* construct the clause for the lambda in the apply match *)
       let apply_clause =
-        PatData(Error.dummy, absdatacons,
-                       AtomSet.elements freetyvars, tenv_vars), x, e' in
+        PatData(Error.dummy, absdatacons, AtomSet.elements freetyvars,
+                tenv_vars), x, (translate_type arrow typ), e' in
       apply_clauses := apply_clause::(!apply_clauses);
       (absdatacons, univ_type)::newdatacons,
       TeData(absdatacons,
