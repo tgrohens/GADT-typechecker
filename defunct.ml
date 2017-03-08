@@ -78,7 +78,7 @@ let rec translate_type arrow typ = match typ with
 
   | TyWhere(t1, t2, t3) ->
       TyWhere(translate_type arrow t1, translate_type arrow t2,
-        translate_type arrow t2)  
+        translate_type arrow t3)  
 
 (* return the term and a list of newly created data constructors matching the
    λ-abstractions inside the term *)
